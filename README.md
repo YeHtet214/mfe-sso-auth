@@ -11,6 +11,19 @@ Currently, two official plugins are available:
 
 The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
 
+## GitHub Actions deployment
+
+This repository now includes a GitHub Actions workflow at `.github/workflows/deploy.yml` that builds the Vite app and deploys `dist/` to GitHub Pages whenever code is pushed to the `main` branch (or manually via **workflow_dispatch**).
+
+To enable deployment:
+
+1. Push this repository to GitHub.
+2. In **Settings → Pages**, set **Source** to **GitHub Actions**.
+3. Ensure your default branch is `main` (or update the workflow branch trigger).
+4. Push a commit to `main` (or run the workflow manually) and GitHub will publish your site.
+
+The Vite `base` path is automatically set during GitHub Actions runs using `GITHUB_REPOSITORY`, so assets resolve correctly on GitHub Pages project sites.
+
 ## Expanding the ESLint configuration
 
 If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
