@@ -1,15 +1,15 @@
 import { AxiosError } from "axios";
-import api, { csrfCookie } from "./axios";
+import api from "./axios";
 
 export interface LoginPayload {
 	email: string;
 	password: string;
-	remember: boolean;
 }
 
 export interface LoginResponse {
 	message?: string;
 	user?: User;
+	token?: string;
 }
 
 export interface User {
@@ -31,15 +31,7 @@ function getValidationMessage(errorBody?: LaravelValidationErrors) {
 
 export async function login(payload: LoginPayload): Promise<LoginResponse> {
 	try {
-		const response = await csrfCookie().then(() => {
-			return api.post<LoginResponse>("/login", payload, {
-				headers: {
-					Accept: "application/json",
-					"Content-Type": "application/json",
-				},
-				withCredentials: true,
-			});
-		});
+		const response = await api.post<LoginResponse>("/api/login", payload);
 		return response.data;
 	} catch (error) {
 		const axiosError = error as AxiosError<LaravelValidationErrors>;
@@ -56,6 +48,15 @@ export async function getUser(): Promise<User> {
 		const response = await api.get<User>("/api/me");
 		return response.data;
 	} catch (error) {
+		throw error;
+	}
+}
+
+export async function logout(): Promise<void> {
+	try {
+		await api.post("/api/logout");
+	} catch (error) {
+		console.error("Logout error:", error);
 		throw error;
 	}
 }

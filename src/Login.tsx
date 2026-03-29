@@ -1,16 +1,16 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { login, getUser } from './api/auth'
+import { login, getUser, logout, type User } from './api/auth'
+import { createSsoToken, redirectWithToken } from './api/sso'
+import { setToken, removeToken } from './api/axios'
 
 interface FormState {
   email: string
   password: string
-  remember: boolean
 }
 
 const initialState: FormState = {
   email: '',
   password: '',
-  remember: false,
 }
 
 function Login() {
@@ -19,22 +19,31 @@ function Login() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [initializing, setInitializing] = useState(true)
+  const [user, setUser] = useState<User | null>(null)
+  const [redirectUri, setRedirectUri] = useState<string | null>(null)
 
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        await getUser()
-        // If user is already logged in, handle redirect immediately
+        const userData = await getUser()
+        setUser(userData)
+        
         const urlParams = new URLSearchParams(window.location.search)
-        const redirectUrl = urlParams.get('redirect')
-        if (redirectUrl) {
-          window.location.replace(redirectUrl)
+        const clientId = urlParams.get('client_id')
+        const redirect = urlParams.get('redirect_uri')
+        setRedirectUri(redirect)
+        
+        if (clientId && redirect) {
+          try {
+            const tokenData = await createSsoToken(clientId, redirect)
+            redirectWithToken(redirect, tokenData.access_token)
+          } catch {
+            setInitializing(false)
+          }
         } else {
-          setSuccess('Already logged in.')
           setInitializing(false)
         }
-      } catch (err) {
-        // Not logged in, that's fine for the login page
+      } catch {
         setInitializing(false)
       }
     }
@@ -55,17 +64,20 @@ function Login() {
 
     try {
       const response = await login(form)
-      const userEmail = response.user?.email ?? form.email
-      setSuccess(`Logged in as ${userEmail}.`)
+      if (response.token) {
+        setToken(response.token)
+      }
+      setUser(response.user ?? null)
+      setSuccess('Logged in successfully.')
       setForm((prev) => ({ ...prev, password: '' }))
 
-      // Check for redirect URL in query parameters
       const urlParams = new URLSearchParams(window.location.search)
-      const redirectUrl = urlParams.get('redirect')
+      const clientId = urlParams.get('client_id')
+      const redirect = urlParams.get('redirect_uri')
 
-      if (redirectUrl) {
-        // Redirect back to the original application
-        window.location.replace(redirectUrl)
+      if (clientId && redirect) {
+        const tokenData = await createSsoToken(clientId, redirect)
+        redirectWithToken(redirect, tokenData.access_token)
       }
     } catch (submitError) {
       if (submitError instanceof Error) {
@@ -78,10 +90,46 @@ function Login() {
     }
   }
 
+  const handleLogout = async () => {
+    try {
+      await logout()
+      removeToken()
+      setUser(null)
+      const urlParams = new URLSearchParams(window.location.search)
+      const redirect = urlParams.get('redirect_uri')
+      if (redirect) {
+        window.location.href = redirect
+      } else {
+        window.location.reload()
+      }
+    } catch {
+      setError('Logout failed.')
+    }
+  }
+
   if (initializing) {
     return <p>Checking authentication...</p>
   }
 
+  // User is logged in - show welcome screen
+  if (user) {
+    return (
+      <section className="auth-card">
+        <h1 className="auth-title">Welcome</h1>
+        <p className="auth-subtitle">Logged in as {user.email}</p>
+        <button className="auth-submit" onClick={handleLogout}>
+          Logout
+        </button>
+        {redirectUri && (
+          <p className="auth-subtitle" style={{ marginTop: '1rem', fontSize: '0.9rem' }}>
+            Click logout to sign out and return to the app
+          </p>
+        )}
+      </section>
+    )
+  }
+
+  // User is not logged in - show login form
   return (
     <section className="auth-card" aria-label="Login form">
       <h1 className="auth-title">Welcome Back</h1>
@@ -113,16 +161,6 @@ function Login() {
           onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
           autoComplete="current-password"
         />
-
-        <label className="auth-checkbox-row" htmlFor="remember">
-          <input
-            id="remember"
-            type="checkbox"
-            checked={form.remember}
-            onChange={(event) => setForm((prev) => ({ ...prev, remember: event.target.checked }))}
-          />
-          <span>Remember me</span>
-        </label>
 
         {error ? <p className="auth-message auth-message-error">{error}</p> : null}
         {success ? <p className="auth-message auth-message-success">{success}</p> : null}
