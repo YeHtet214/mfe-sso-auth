@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { login, getUser, logout, type User } from './api/auth'
-import { createSsoToken, redirectWithToken } from './api/sso'
+import { createSsoToken, redirectWithToken, redirectToOrigin } from './api/sso'
 import { setToken, removeToken } from './api/axios'
 
 interface FormState {
@@ -21,6 +21,7 @@ function Login() {
   const [initializing, setInitializing] = useState(true)
   const [user, setUser] = useState<User | null>(null)
   const [redirectUri, setRedirectUri] = useState<string | null>(null)
+  const [clientId, setClientId] = useState<string | null>(null)
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -29,13 +30,14 @@ function Login() {
         setUser(userData)
         
         const urlParams = new URLSearchParams(window.location.search)
-        const clientId = urlParams.get('client_id')
+        const clientIdParam = urlParams.get('client_id')
         const redirect = urlParams.get('redirect_uri')
         setRedirectUri(redirect)
+        setClientId(clientIdParam)
         
-        if (clientId && redirect) {
+        if (clientIdParam && redirect) {
           try {
-            const tokenData = await createSsoToken(clientId, redirect)
+            const tokenData = await createSsoToken(clientIdParam, redirect)
             redirectWithToken(redirect, tokenData.access_token)
           } catch {
             setInitializing(false)
@@ -76,8 +78,12 @@ function Login() {
       const redirect = urlParams.get('redirect_uri')
 
       if (clientId && redirect) {
-        const tokenData = await createSsoToken(clientId, redirect)
-        redirectWithToken(redirect, tokenData.access_token)
+        try {
+          const tokenData = await createSsoToken(clientId, redirect)
+          redirectWithToken(redirect, tokenData.access_token)
+        } catch {
+          // Auto-redirect failed, user can use manual button
+        }
       }
     } catch (submitError) {
       if (submitError instanceof Error) {
@@ -117,14 +123,19 @@ function Login() {
       <section className="auth-card">
         <h1 className="auth-title">Welcome</h1>
         <p className="auth-subtitle">Logged in as {user.email}</p>
-        <button className="auth-submit" onClick={handleLogout}>
-          Logout
-        </button>
-        {redirectUri && (
-          <p className="auth-subtitle" style={{ marginTop: '1rem', fontSize: '0.9rem' }}>
-            Click logout to sign out and return to the app
-          </p>
-        )}
+        <div className="auth-button-group">
+          {redirectUri && clientId && (
+            <button
+              className="auth-submit"
+              onClick={() => redirectToOrigin(redirectUri, clientId)}
+            >
+              Return to App
+            </button>
+          )}
+          <button className="auth-submit auth-submit-secondary" onClick={handleLogout}>
+            Logout
+          </button>
+        </div>
       </section>
     )
   }
@@ -163,7 +174,20 @@ function Login() {
         />
 
         {error ? <p className="auth-message auth-message-error">{error}</p> : null}
-        {success ? <p className="auth-message auth-message-success">{success}</p> : null}
+        {success ? (
+          <div className="auth-success-section">
+            <p className="auth-message auth-message-success">{success}</p>
+            {redirectUri && clientId && (
+              <button
+                type="button"
+                className="auth-submit"
+                onClick={() => redirectToOrigin(redirectUri, clientId)}
+              >
+                Return to App
+              </button>
+            )}
+          </div>
+        ) : null}
 
         <button type="submit" className="auth-submit" disabled={loading}>
           {loading ? 'Signing in...' : 'Sign In'}

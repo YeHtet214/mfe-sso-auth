@@ -38,3 +38,14 @@ export function clearUrlHash(): void {
 export function redirectWithToken(redirectUri: string, token: string): void {
 	window.location.href = `${redirectUri}#token=${token}`;
 }
+
+export function redirectToOrigin(redirectUri: string, clientId: string): void {
+	api.post<CreateTokenResponse>("/api/sso/create-token", {
+		client_id: clientId,
+		redirect_uri: redirectUri,
+	}).then((response) => {
+		window.location.href = `${redirectUri}#token=${response.data.access_token}`;
+	}).catch(() => {
+		window.location.href = redirectUri;
+	});
+}
