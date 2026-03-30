@@ -3,7 +3,7 @@ import axios from "axios";
 const api = axios.create({
 	baseURL:
 		import.meta.env.VITE_API_BASE_URL ??
-		"https://laravel-api-for-microfrontend-main-czaohc.free.laravel.cloud/",
+		"https://laravel-api-for-microfrontend-main-czaohc.free.laravel.cloud",
 	timeout: 10000,
 	headers: {
 		Accept: "application/json",
